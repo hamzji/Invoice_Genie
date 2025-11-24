@@ -5,5 +5,5 @@
 - PDF 인보이스 자동 분석
 - 제품별 총 수량/총금액 계산
 - PO Reference 자동 추출
-- Invoice Date & Invoice Number 추출
+- Invoice Date 추출
 - UI 드래그 업로드 지원
