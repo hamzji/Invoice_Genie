@@ -80,52 +80,68 @@ def detect_vendor(text: str) -> str:
 # -------------------------------------------------
 def parse_paragon(text: str):
     """
-    Paragon 인보이스에서 CRT 100 / CRT 100 DA 품목 수량 + 금액을 유연하게 추출
+    Paragon 인보이스에서 CRT 100 / CRT 100 DA 품목의 수량과 금액을 추출하는 파서.
+    pdfplumber로 추출된 세로 레이아웃(1.00 / CRT100 / Regular / CRT 100 ...)을 기준으로 동작한다.
     """
+    lines = text.splitlines()
+
+    # 1) "1.00" 바로 뒤 2~3줄 안에 "CRT100" 이 나오는 경우를 한 품목 블록의 시작으로 본다.
+    qty_indices = []
+    for i, line in enumerate(lines):
+        if line.strip() == "1.00":
+            for j in range(i + 1, min(i + 4, len(lines))):
+                if "CRT100" in lines[j]:
+                    qty_indices.append(i)
+                    break
+
     grouped = defaultdict(lambda: {"qty": 0.0, "amount": 0.0})
 
-    # 품목이 있는 줄만 추출
-    for line in text.splitlines():
-        upper = line.upper()
+    # 2) 각 블록별로 마지막 금액(예: 58.00)을 찾아서 최종 금액으로 사용한다.
+    for pos, qidx in enumerate(qty_indices):
+        block_start = qidx
+        block_end = qty_indices[pos + 1] if pos + 1 < len(qty_indices) else len(lines)
+        block_lines = lines[block_start:block_end]
+        block_text_upper = "\n".join(block_lines).upper()
 
-        # CRT 품목 라인만 필터링
-        if ("CRT" not in upper) or ("100" not in upper):
-            continue
-
-        # 수량(맨 앞 숫자) 찾기
-        qty_match = re.match(r"\s*(\d+(?:\.\d+)?)", line)
-        if not qty_match:
-            continue
-        qty = float(qty_match.group())
-
-        # 금액(줄에 있는 가장 마지막 금액) 찾기
-        numbers = re.findall(r"[\d,]+\.\d+", line)
-        if not numbers:
-            continue
-        amount = float(numbers[-1].replace(",", ""))
-
-        # 품목 분류
-        if "DA" in upper:
+        # 제품 타입 분류 (CRT 100 vs CRT 100 DA)
+        if re.search(r"CRT\s*100\s*DA", block_text_upper):
             key = "CRT 100 DA"
         else:
             key = "CRT 100"
 
-        grouped[key]["qty"] += qty
-        grouped[key]["amount"] += amount
+        # 수량: 시작 줄의 1.00 기준 (나중에 수량이 달라지면 여기만 조정하면 됨)
+        try:
+            qty_val = float(lines[qidx].strip())
+        except ValueError:
+            qty_val = 1.0
 
-    # 결과 정리
+        # 블록 내부에서 소수점 금액 패턴 찾기 (마지막 값을 총액으로 사용)
+        amount_candidates = []
+        for k in range(block_start + 1, block_end):
+            num_str = lines[k].strip()
+            if re.match(r"^\d[\d,]*\.\d{2}$", num_str):
+                amount_candidates.append(float(num_str.replace(",", "")))
+
+        final_amount = amount_candidates[-1] if amount_candidates else 0.0
+
+        grouped[key]["qty"] += qty_val
+        grouped[key]["amount"] += final_amount
+
+    # 3) 결과 rows 구성
     rows = []
     for key in ["CRT 100", "CRT 100 DA"]:
-        if key in grouped:
-            data = grouped[key]
-            # 수량: 소수점 제거
-            q = data["qty"]
-            qty_display = int(q) if float(q).is_integer() else q
-            rows.append({
+        data = grouped.get(key)
+        if not data:
+            continue
+        q = data["qty"]
+        qty_display = int(q) if float(q).is_integer() else q
+        rows.append(
+            {
                 "item": key,
                 "qty": qty_display,
                 "amount": data["amount"],
-            })
+            }
+        )
 
     total_qty = sum(r["qty"] for r in rows)
     total_amount = sum(r["amount"] for r in rows)
@@ -137,137 +153,329 @@ def parse_paragon(text: str):
         "total_amount": total_amount,
     }
 
-
 # -------------------------------------------------
 # 💜 HTML 템플릿
 # -------------------------------------------------
 HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-<title>Invoice Genie 🧙‍♂️</title>
-<style>
-body { font-family:-apple-system, sans-serif; background:#f7ecff; padding:40px; color:#4b0082;}
-h1 { font-size:42px; font-weight:800; }
-.drop { border:3px dashed #a96df0; padding:60px; text-align:center; font-size:20px; border-radius:25px; cursor:pointer; background:white; transition:background 0.2s;}
-.drop.dragover {background:#f2e6ff;}
-button { padding:12px 40px; font-size:18px; border-radius:15px; background:#884dff; color:white; border:none; cursor:pointer;}
-button:hover { background:#6e33ff; }
-.result { margin-top:30px; padding:25px; border-radius:15px; background:white; border:1px solid #ddd; font-size:18px;}
-table { width:100%; border-collapse:collapse; font-size:16px; margin-top:15px;}
-th,td { padding:8px; border:1px solid #ccc; text-align:center;}
-.filename { font-size:16px; color:#333; margin-top:10px;}
-.filename b { color:#4b0082; }
-.err { background:#ffdede; color:#b30000; border:2px solid #ff8a8a; }
-</style>
+  <meta charset="utf-8" />
+  <title>Invoice Genie</title>
+  <!-- Pretendard 웹폰트 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard/dist/web/static/pretendard.css" />
+  <style>
+    :root {
+      --bg: #f9f5ff;
+      --card-bg: #ffffff;
+      --primary: #6d4aff;
+      --primary-soft: #f0e9ff;
+      --primary-strong: #4b2ee8;
+      --text-main: #241b3a;
+      --text-muted: #7b7394;
+      --border-soft: #e1d7ff;
+      --error-bg: #ffe9ea;
+      --error-border: #ff9ca8;
+      --error-text: #b3263e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 40px 24px;
+      background: var(--bg);
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 980px;
+    }
+
+    .header {
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    .card {
+      margin-top: 12px;
+      padding: 26px 26px 30px;
+      border-radius: 24px;
+      background: var(--card-bg);
+      box-shadow: 0 16px 40px rgba(23, 8, 64, 0.09);
+      border: 1px solid var(--border-soft);
+    }
+
+    .drop {
+      position: relative;
+      border-radius: 20px;
+      border: 2px dashed #c3adff;
+      background: var(--primary-soft);
+      padding: 40px 28px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.1s ease;
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    .drop.dragover {
+      background: #e4d6ff;
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    .drop input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .filename {
+      margin-top: 10px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .filename b {
+      color: var(--primary-strong);
+    }
+
+    .actions {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-start;
+    }
+
+    button {
+      padding: 11px 32px;
+      font-size: 16px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+      color: #ffffff;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 10px 26px rgba(91, 67, 206, 0.25);
+    }
+
+    button:hover {
+      filter: brightness(1.04);
+      box-shadow: 0 12px 32px rgba(91, 67, 206, 0.3);
+    }
+
+    .result {
+      margin-top: 26px;
+      padding: 22px 22px 24px;
+      border-radius: 20px;
+      background: #fcfaff;
+      border: 1px solid var(--border-soft);
+      font-size: 15px;
+    }
+
+    .result.err {
+      background: var(--error-bg);
+      border-color: var(--error-border);
+      color: var(--error-text);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px 24px;
+      margin-bottom: 14px;
+    }
+
+    .meta-row span.label {
+      display: inline-block;
+      min-width: 96px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .meta-row span.value {
+      color: var(--primary-strong);
+      font-weight: 500;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e4e0f5;
+      text-align: center;
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--text-muted);
+      background: #f7f3ff;
+    }
+
+    tfoot td {
+      font-weight: 700;
+      border-top: 1px solid #d5cbff;
+      background: #f6f1ff;
+    }
+
+    .empty-msg {
+      margin-top: 4px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+  </style>
 </head>
-
 <body>
-<h1>🧙‍♂️ Invoice Genie</h1>
-<div class="subtitle">
-    인보이스 PDF에서 제품 정보, 수량, 금액 등을 자동으로 분석해주는 도구입니다.
-</div>
+  <div class="container">
+    <header class="header">
+      <h1>Invoice Genie</h1>
+      <div class="subtitle">인보이스 PDF에서 제품 정보, 수량, 금액 등을 자동으로 분석해주는 도구입니다.</div>
+    </header>
 
-<form method="POST" enctype="multipart/form-data">
-    <!-- 서버에서 넘어온 마지막 파일명을 data-filename 으로 넣어둠 -->
-    <div class="drop" id="dropZone" data-filename="{{ filename or '' }}">
-        <span id="dropText">📎 PDF 파일을 드래그하거나 클릭해 업로드하세요</span>
-    </div>
-    <input type="file" name="file" id="fileInput" style="display:none" accept="application/pdf">
+    <div class="card">
+      <form method="POST" enctype="multipart/form-data">
+        <div class="drop" id="dropZone" data-filename="{{ filename or '' }}">
+          <span id="dropText">
+            {% if filename %}
+              ✅ {{ filename }} 업로드 준비 완료
+            {% else %}
+              PDF 파일을 드래그하거나 클릭해 업로드하세요
+            {% endif %}
+          </span>
+          <input id="fileInput" type="file" name="file" accept="application/pdf" />
+        </div>
 
-    <div class="filename" id="fileLabel">
         {% if filename %}
-        📤 업로드된 파일: <b>{{ filename }}</b>
-        {% else %}
-        아직 업로드된 파일이 없습니다.
+          <div class="filename">📎 업로드된 파일: <b>{{ filename }}</b></div>
         {% endif %}
+
+        <div class="actions">
+          <button type="submit">Analyze</button>
+        </div>
+      </form>
+
+      {% if error %}
+        <div class="result err">{{ error }}</div>
+      {% elif rows %}
+        <div class="result">
+          <div class="meta">
+            <div class="meta-row">
+              <span class="label">Vendor</span>
+              <span class="value">{{ vendor }}</span>
+            </div>
+            {% if invoice_date_kr %}
+            <div class="meta-row">
+              <span class="label">Invoice Date</span>
+              <span class="value">{{ invoice_date_kr }}</span>
+            </div>
+            {% endif %}
+            {% if po_numbers %}
+            <div class="meta-row" style="grid-column: 1 / -1;">
+              <span class="label">Ref PO</span>
+              <span class="value">{{ po_numbers }}</span>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if rows %}
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Total Amount (USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr>
+                <td>{{ row.item }}</td>
+                <td>{{ row.qty }}</td>
+                <td>{{ "{:,.2f}".format(row.amount) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>합계</td>
+                <td>{{ total_qty }}</td>
+                <td>{{ "{:,.2f}".format(total_amount) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+          {% else %}
+            <div class="empty-msg">분석된 품목이 없습니다.</div>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
+  </div>
 
-    <br><button type="submit">✨ Analyze</button>
-</form>
+  <script>
+    const dz = document.getElementById("dropZone");
+    const fi = document.getElementById("fileInput");
+    const dropText = document.getElementById("dropText");
 
-{% if rows is not none %}
-<div class="result">
-    {% if vendor %}
-    <b>📌 Vendor:</b> {{ vendor }}<br>
-    {% endif %}
+    function setFileNameFromDataAttr() {
+      const existing = dz.getAttribute("data-filename");
+      if (existing) {
+        dropText.textContent = `✅ ${existing} 업로드 준비 완료`;
+      }
+    }
 
-    {% if invoice_date_kr %}
-    <b>🗓 Invoice Date:</b> {{ invoice_date_kr }}<br>
-    {% elif invoice_date_raw %}
-    <b>🗓 Invoice Date:</b> {{ invoice_date_raw }}<br>
-    {% endif %}
+    setFileNameFromDataAttr();
 
-    {% if po_numbers %}
-    <b>📌 Ref PO:</b> {{ ", ".join(po_numbers) }}<br>
-    {% endif %}
-    <br>
+    function handleFileSelect(files) {
+      if (!files || files.length === 0) return;
+      const name = files[0].name;
+      dropText.textContent = `✅ ${name} 업로드 준비 완료`;
+    }
 
-    {% if rows %}
-    <table>
-        <tr><th>제품명</th><th>총 수량</th><th>총 금액 (USD)</th></tr>
-        {% for row in rows %}
-        <tr>
-            <td>{{ row.item }}</td>
-            <td>{{ row.qty }}</td>
-            <td>{{ "{:,.2f}".format(row.amount) }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    dz.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dz.classList.add("dragover");
+    });
 
-    <br>
-    <b>📦 인보이스 전체 총 수량:</b> {{ total_qty }} EA<br>
-    <b>💰 인보이스 전체 총 금액:</b> {{ "{:,.2f}".format(total_amount) }} USD
-    {% else %}
-    <p>CRT 100 / CRT 100 DA 품목을 찾지 못했습니다.</p>
-    {% endif %}
-</div>
-{% elif error %}
-<div class="result err"><b>{{ error }}</b></div>
-{% endif %}
+    dz.addEventListener("dragleave", () => {
+      dz.classList.remove("dragover");
+    });
 
-<script>
-const dz  = document.getElementById("dropZone");
-const fi  = document.getElementById("fileInput");
-const dt  = document.getElementById("dropText");
-const flb = document.getElementById("fileLabel");
-
-// ⚡ 페이지 로드 시, 서버에서 넘어온 filename 이 있으면 표시
-const initialName = dz.dataset.filename;
-if (initialName) {
-    dt.textContent  = "✅ " + initialName + " 업로드 완료";
-    flb.innerHTML   = "📤 업로드된 파일: <b>" + initialName + "</b>";
-}
-
-// 파일 선택/드래그 시 즉시 UI 업데이트
-function handleFileSelect(files) {
-    if (!files || files.length === 0) return;
-    const name = files[0].name;
-    dt.textContent = "✅ " + name + " 업로드 준비 완료";
-    flb.innerHTML  = "📤 업로드된 파일: <b>" + name + "</b>";
-}
-
-dz.addEventListener("click", () => fi.click());
-dz.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dz.classList.add("dragover");
-});
-dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
-dz.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dz.classList.remove("dragover");
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    dz.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dz.classList.remove("dragover");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         fi.files = e.dataTransfer.files;
         handleFileSelect(fi.files);
-    }
-});
-fi.addEventListener("change", () => handleFileSelect(fi.files));
-</script>
+      }
+    });
+
+    fi.addEventListener("change", () => handleFileSelect(fi.files));
+  </script>
 </body>
 </html>
 """
-
-
 # -------------------------------------------------
 # 🌍 Flask 라우트
 # -------------------------------------------------
