@@ -80,62 +80,52 @@ def detect_vendor(text: str) -> str:
 # -------------------------------------------------
 def parse_paragon(text: str):
     """
-    Paragon 인보이스에서 CRT 100 / CRT 100 DA 라인이 들어 있는 줄을 찾아
-    - 첫 번째 숫자: 수량(qty)
-    - 마지막 숫자: 해당 줄 금액(final amount)
-    로 간주하고 합산하는 느슨한 파서
+    Paragon 인보이스에서 CRT 100 / CRT 100 DA 품목 수량 + 금액을 유연하게 추출
     """
     grouped = defaultdict(lambda: {"qty": 0.0, "amount": 0.0})
 
+    # 품목이 있는 줄만 추출
     for line in text.splitlines():
         upper = line.upper()
 
-        # CRT가 없으면 스킵
-        if "CRT" not in upper:
+        # CRT 품목 라인만 필터링
+        if ("CRT" not in upper) or ("100" not in upper):
             continue
 
-        # 숫자가 2개 미만이면 (수량 + 금액) 구조가 아닐 확률 ↑ → 스킵
-        nums = re.findall(r"[\d,]+\.\d+", line)
-        if len(nums) < 2:
-            continue
-
-        # 제일 앞쪽에 나오는 숫자를 수량으로 사용 (1.00, 80.00 등)
-        qty_match = re.search(r"\d+(?:\.\d+)?", line)
+        # 수량(맨 앞 숫자) 찾기
+        qty_match = re.match(r"\s*(\d+(?:\.\d+)?)", line)
         if not qty_match:
             continue
         qty = float(qty_match.group())
 
-        # 마지막 숫자를 해당 라인 최종 금액으로 사용
-        final_amount = float(nums[-1].replace(",", ""))
-
-        # 품목명 단순 분류
-        # - "CRT 100 DA", "CRT100 DA", "CRTDA" 등 → CRT 100 DA
-        # - 나머지 "CRT 100", "CRT100" → CRT 100
-        if "CRT" in upper and "100" in upper and "DA" in upper:
-            key = "CRT 100 DA"
-        elif "CRT" in upper and "100" in upper:
-            key = "CRT 100"
-        else:
-            # 그 외 CRT 라인은 굳이 안 모을 거면 스킵
+        # 금액(줄에 있는 가장 마지막 금액) 찾기
+        numbers = re.findall(r"[\d,]+\.\d+", line)
+        if not numbers:
             continue
+        amount = float(numbers[-1].replace(",", ""))
+
+        # 품목 분류
+        if "DA" in upper:
+            key = "CRT 100 DA"
+        else:
+            key = "CRT 100"
 
         grouped[key]["qty"] += qty
-        grouped[key]["amount"] += final_amount
+        grouped[key]["amount"] += amount
 
     # 결과 정리
     rows = []
     for key in ["CRT 100", "CRT 100 DA"]:
         if key in grouped:
             data = grouped[key]
+            # 수량: 소수점 제거
             q = data["qty"]
             qty_display = int(q) if float(q).is_integer() else q
-            rows.append(
-                {
-                    "item": key,
-                    "qty": qty_display,
-                    "amount": data["amount"],
-                }
-            )
+            rows.append({
+                "item": key,
+                "qty": qty_display,
+                "amount": data["amount"],
+            })
 
     total_qty = sum(r["qty"] for r in rows)
     total_amount = sum(r["amount"] for r in rows)
@@ -145,18 +135,6 @@ def parse_paragon(text: str):
         "rows": rows,
         "total_qty": total_qty,
         "total_amount": total_amount,
-    }
-
-
-# -------------------------------------------------
-# 🧪 PhysIOL (자리만 잡아둔 상태)
-# -------------------------------------------------
-def parse_physiol(text: str):
-    return {
-        "vendor": "PhysIOL",
-        "rows": [],
-        "total_qty": 0,
-        "total_amount": 0.0,
     }
 
 
