@@ -291,34 +291,39 @@ def index():
             tmp_path = "tmp_invoice.pdf"
             pdf.save(tmp_path)
 
-try:
-    text = extract_text(tmp_path)
-except Exception:
-    error = "❌ PDF 텍스트를 읽는 중 오류가 발생했습니다."
-    text = ""
-
+            # PDF 텍스트 추출 (예외 방지)
+            try:
+                text = extract_text(tmp_path)
+            except Exception:
+                error = "❌ PDF 텍스트를 읽는 중 오류가 발생했습니다."
+                text = ""
 
             # 날짜 & PO 번호 추출
             invoice_date_raw, invoice_date_kr = extract_invoice_date(text)
             po_numbers = extract_po_numbers(text)
 
+            # 벤더 판별 + 파싱
+            vendor_type = detect_vendor(text)
             parsed = None
             if vendor_type == "PARAGON":
                 parsed = parse_paragon(text)
             elif vendor_type == "PHYSIOL":
-                parsed = parse_physiol(text)  # 나중에 확장
+                parsed = parse_physiol(text)
             else:
-                error = "❌ 지원되지 않는 인보이스 형식입니다."
+                if not error:
+                    error = "❌ 지원되지 않는 인보이스 형식입니다."
 
+            # 임시 파일 삭제
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+            # 파싱 결과 검증
             if parsed:
                 vendor = parsed["vendor"]
                 rows = parsed["rows"]
                 total_qty = parsed["total_qty"]
                 total_amount = parsed["total_amount"]
-                if not rows:
+                if not rows and not error:
                     error = "❌ CRT 100 / CRT 100 DA 품목을 찾지 못했습니다."
 
     return render_template_string(
