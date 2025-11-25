@@ -79,29 +79,50 @@ def detect_vendor(text: str) -> str:
 #   - CRT 100 / CRT 100 DA 단위로 합산
 # -------------------------------------------------
 def parse_paragon(text: str):
-    # 예: 1.00 CRTDA Regular CRT 100 DA ... 70.00 0.00 0.00 70.00
-    pattern = r"(\d+\.\d+)\s+(CRT[^\n]+?)\s+(\d+\.\d+)\s0\.00\s0\.00\s([\d,]+\.\d+)"
-    matches = re.findall(pattern, text)
-
+    """
+    Paragon 인보이스에서 CRT 100 / CRT 100 DA 라인이 들어 있는 줄을 찾아
+    - 첫 번째 숫자: 수량(qty)
+    - 마지막 숫자: 해당 줄 금액(final amount)
+    로 간주하고 합산하는 느슨한 파서
+    """
     grouped = defaultdict(lambda: {"qty": 0.0, "amount": 0.0})
 
-    for qty_str, item_desc, unit_price_str, final_str in matches:
-        qty = float(qty_str)
-        final_amount = float(final_str.replace(",", ""))
+    for line in text.splitlines():
+        upper = line.upper()
 
-        desc_upper = item_desc.upper()
+        # CRT가 없으면 스킵
+        if "CRT" not in upper:
+            continue
 
-        # 👉 제품명을 단순화해서 두 그룹으로 묶기
-        if "CRT 100 DA" in desc_upper or "CRTDA" in desc_upper:
+        # 숫자가 2개 미만이면 (수량 + 금액) 구조가 아닐 확률 ↑ → 스킵
+        nums = re.findall(r"[\d,]+\.\d+", line)
+        if len(nums) < 2:
+            continue
+
+        # 제일 앞쪽에 나오는 숫자를 수량으로 사용 (1.00, 80.00 등)
+        qty_match = re.search(r"\d+(?:\.\d+)?", line)
+        if not qty_match:
+            continue
+        qty = float(qty_match.group())
+
+        # 마지막 숫자를 해당 라인 최종 금액으로 사용
+        final_amount = float(nums[-1].replace(",", ""))
+
+        # 품목명 단순 분류
+        # - "CRT 100 DA", "CRT100 DA", "CRTDA" 등 → CRT 100 DA
+        # - 나머지 "CRT 100", "CRT100" → CRT 100
+        if "CRT" in upper and "100" in upper and "DA" in upper:
             key = "CRT 100 DA"
-        elif "CRT 100" in desc_upper or "CRT100" in desc_upper:
+        elif "CRT" in upper and "100" in upper:
             key = "CRT 100"
         else:
-            key = "OTHER"
+            # 그 외 CRT 라인은 굳이 안 모을 거면 스킵
+            continue
 
         grouped[key]["qty"] += qty
         grouped[key]["amount"] += final_amount
 
+    # 결과 정리
     rows = []
     for key in ["CRT 100", "CRT 100 DA"]:
         if key in grouped:
