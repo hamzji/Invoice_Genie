@@ -81,16 +81,11 @@ def index():
             "summary": summary
         }
 
-    # GET 또는 결과 반환
-    return render_template("index.html", result=result, filename=filename)
+        return render_template("index.html", result=result, filename=filename)
 
-        filename = file.filename
-        vendor, currency, summary = parse_invoice(file)
-
-        result = {"vendor": vendor, "currency": currency, "summary": summary}
-
-    return render_template("index.html", result=result, filename=filename)
+    # GET 요청: 처음 페이지
+    return render_template("index.html", result=None, filename=None)
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000)
