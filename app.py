@@ -164,7 +164,9 @@ th,td { padding:8px; border:1px solid #ccc; text-align:center;}
 
 <body>
 <h1>🧙‍♂️ Invoice Genie</h1>
-<p>Paragon 인보이스에서 <b>CRT 100 / CRT 100 DA</b> 수량과 금액을 자동으로 합산해주는 도구입니다.</p>
+<div class="subtitle">
+    인보이스 PDF에서 제품 정보, 수량, 금액 등을 자동으로 분석해주는 도구입니다.
+</div>
 
 <form method="POST" enctype="multipart/form-data">
     <!-- 서버에서 넘어온 마지막 파일명을 data-filename 으로 넣어둠 -->
