@@ -60,16 +60,29 @@ def parse_invoice(file):
 
     return vendor, currency, summary
 
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = None
     filename = None
 
+    # POST 요청: 파일 업로드
     if request.method == "POST":
         file = request.files.get("file")
         if not file:
-            return render_template("index.html", result=None)
+            return render_template("index.html", result=None, filename=None)
+
+        filename = file.filename
+        vendor, currency, summary = parse_invoice(file)
+
+        # 파싱 결과 묶기
+        result = {
+            "vendor": vendor,
+            "currency": currency,
+            "summary": summary
+        }
+
+    # GET 또는 결과 반환
+    return render_template("index.html", result=result, filename=filename)
 
         filename = file.filename
         vendor, currency, summary = parse_invoice(file)
