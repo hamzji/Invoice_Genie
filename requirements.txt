@@ -1,6 +1,0 @@
-Flask
-pdfminer.six
-PyPDF2
-Werkzeug
-gunicorn
-pdfplumber
