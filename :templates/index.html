@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Genie</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>Invoice Genie</h1>
+    <div class="subtitle">인보이스 PDF에서 제품 정보, 수량, 금액 등을 자동으로 분석해주는 도구입니다.</div>
+
+    <form method="POST" enctype="multipart/form-data">
+        <div class="upload-box">
+            <input type="file" name="file" required>
+        </div>
+
+        {% if filename %}
+        <div class="upload-success">
+            <span class="upload-icon">☑️</span>
+            <span>{{ filename }} 업로드 완료</span>
+        </div>
+        {% endif %}
+
+        <button type="submit">Analyze</button>
+    </form>
+
+    {% if result %}
+    <div class="table-box">
+        <table>
+            <tr><th>Vendor</th><td>{{ result.vendor }}</td></tr>
+            <tr><th>Currency</th><td>{{ result.currency }}</td></tr>
+        </table>
+
+        <table style="margin-top:16px;">
+            <tr><th>Item</th><th>Quantity</th><th>Total Amount</th></tr>
+            <tr><td>CRT 100</td><td>{{ result.summary["CRT 100"].qty }}</td><td>${{ "%.2f"|format(result.summary["CRT 100"].total) }}</td></tr>
+            <tr><td>CRT 100 DA</td><td>{{ result.summary["CRT 100 DA"].qty }}</td><td>${{ "%.2f"|format(result.summary["CRT 100 DA"].total) }}</td></tr>
+            <tr class="total-cell"><td>합계</td>
+                <td>{{ result.summary["CRT 100"].qty + result.summary["CRT 100 DA"].qty }}</td>
+                <td>${{ "%.2f"|format(result.summary["CRT 100"].total + result.summary["CRT 100 DA"].total) }}</td></tr>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
