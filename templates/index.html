@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Genie</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <div class="header-title">📄 Invoice Genie</div>
+        <div class="header-subtitle">PDF 인보이스 업로드 → 자동 분석</div>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label class="upload-box">
+            <span class="upload-text-main">여기를 클릭하여 인보이스 PDF 업로드</span>
+            <span class="upload-text-sub">PDF만 지원합니다</span>
+
+            <input type="file" name="file" class="file-input" onchange="this.form.submit()">
+
+            {% if filename %}
+            <div class="file-info">
+                <span class="check-icon">✔</span>
+                {{ filename }}
+            </div>
+            {% endif %}
+        </label>
+    </form>
+
+    {% if result %}
+    <button onclick="window.location.href='/'" class="file-button">새 파일 업로드</button>
+
+    <div class="result-card">
+        <div class="result-header">
+            <div class="result-label">Vendor</div><div>{{ result.vendor }}</div>
+            <div class="result-label">Currency</div><div>{{ result.currency }}</div>
+            <div class="result-label">Ref PO</div><div>{{ result.summary.po_list }}</div>
+            <div class="result-label">Invoice Date</div><div>{{ result.summary.date }}</div>
+        </div>
+
+        <table class="result-table">
+            <thead>
+            <tr>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Total Amount ({{ result.currency }})</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for name, info in result.summary.items %}
+                {% if name not in ["date", "po_list"] %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ info.qty }}</td>
+                    <td>{{ "{:,.2f}".format(info.total) }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+            <tfoot>
+            <tr>
+                <td>합계</td>
+                <td>{{ result.summary.total_qty }}</td>
+                <td>{{ "{:,.2f}".format(result.summary.total_amount) }}</td>
+            </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% endif %}
+
+</div>
+</body>
+</html>
