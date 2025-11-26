@@ -1,0 +1,212 @@
+/* 전체 레이아웃 */
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #F9F5FF;
+    color: #3B245C;
+}
+
+/* 페이지 컨테이너 */
+.container {
+    max-width: 1000px;
+    margin: 45px auto;
+    padding: 20px;
+}
+
+/* 헤더 */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.header-title {
+    font-size: 2.4rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.header-subtitle {
+    font-size: 0.98rem;
+    color: #7A6899;
+    margin-top: 2px;
+}
+
+/* 업로드 박스 */
+.upload-box {
+    margin-top: 26px;
+    padding: 32px 24px;
+    border-radius: 24px;
+    border: 2px dashed #C6A9FF;
+    background: rgba(246, 240, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.upload-text-main {
+    font-size: 1rem;
+    color: #5B3E7F;
+}
+
+.upload-text-sub {
+    font-size: 0.9rem;
+    color: #8D7CB2;
+}
+
+/* 파일명 & 체크 표시 */
+.file-info {
+    margin-top: 8px;
+    font-size: 0.95rem;
+    color: #6A5BA5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 회색 체크 아이콘 느낌 */
+.check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1.4px solid #A8A8B8;
+    color: #A8A8B8;
+    font-size: 0.75rem;
+}
+
+/* 숨겨진 input */
+.file-input {
+    display: none;
+}
+
+/* 파일 선택 버튼 (회색) */
+.file-button {
+    margin-top: 4px;
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #C8C8D8;
+    background: #F5F5FA;
+    color: #6B6B80;
+    cursor: pointer;
+}
+
+/* Analyze 버튼 */
+.analyze-button {
+    margin-top: 26px;
+    padding: 12px 40px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, #7B61FF, #D06DFF);
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 12px 24px rgba(118, 90, 255, 0.32);
+}
+
+.analyze-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* 결과 카드 */
+.result-card {
+    margin-top: 32px;
+    padding: 24px 26px;
+    border-radius: 22px;
+    background: white;
+    box-shadow: 0 14px 35px rgba(38, 7, 89, 0.12);
+}
+
+/* 결과 헤더 */
+.result-header {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    row-gap: 6px;
+    column-gap: 24px;
+    font-size: 0.94rem;
+}
+
+.result-label {
+    font-weight: 600;
+    color: #7A6899;
+}
+
+.result-value {
+    color: #3B245C;
+}
+
+.result-value a {
+    color: #5B3AE6;
+    text-decoration: none;
+}
+
+/* 테이블 */
+.result-table {
+    width: 100%;
+    margin-top: 18px;
+    border-collapse: collapse;
+    font-size: 0.93rem;
+}
+
+.result-table th,
+.result-table td {
+    padding: 10px 8px;
+    text-align: right;
+}
+
+.result-table th:first-child,
+.result-table td:first-child {
+    text-align: left;
+}
+
+.result-table thead {
+    border-bottom: 1px solid #E3DAFF;
+    color: #7A6899;
+}
+
+.result-table tbody tr + tr {
+    border-top: 1px solid #F2EEFF;
+}
+
+/* 합계 row 강조 */
+.result-table tfoot tr {
+    border-top: 1px solid #D2C3FF;
+}
+
+.result-table tfoot td {
+    font-weight: 700;
+    color: #4A2D80;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .container {
+        margin: 28px auto;
+        padding: 14px;
+    }
+
+    .header-title {
+        font-size: 2.1rem;
+    }
+
+    .upload-box {
+        padding: 24px 16px;
+    }
+
+    .result-card {
+        padding: 18px 16px;
+    }
+
+    .result-header {
+        grid-template-columns: 1fr;
+        row-gap: 3px;
+    }
+}
